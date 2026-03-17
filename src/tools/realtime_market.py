@@ -1,6 +1,6 @@
 """
 Realtime market tools for the MCP server.
-Provides live stock data using Ashare library (Tencent/Sina data sources).
+Provides live stock data using Ashare library (Tencent/Sina data sources) and Akshare.
 """
 import logging
 from typing import List, Optional
@@ -10,6 +10,11 @@ from src.use_cases.realtime_market import (
     fetch_realtime_kline,
     fetch_technical_indicators,
     fetch_realtime_quote,
+    fetch_hot_sectors,
+    fetch_market_index,
+    fetch_lhb_detail,
+    fetch_north_money,
+    fetch_limit_up_down,
 )
 
 logger = logging.getLogger(__name__)
@@ -128,7 +133,7 @@ def register_realtime_market_tools(app: FastMCP):
         """
         Fetches realtime quote snapshot for a Chinese A-share stock.
         
-        Returns the latest trading data including price, volume, and daily change.
+        Returns the latest trading data including price, volume, daily change, and turnover rate.
         Quick overview of current stock status.
 
         Args:
@@ -136,10 +141,127 @@ def register_realtime_market_tools(app: FastMCP):
             format: Output format: 'markdown' | 'json' | 'csv'. Defaults to 'markdown'.
 
         Returns:
-            Latest quote data with: 日期, 开盘价, 最高价, 最低价, 收盘价, 成交量, 涨跌额, 涨跌幅
+            Latest quote data with: 日期, 开盘价, 最高价, 最低价, 收盘价, 成交量, 涨跌额, 涨跌幅, 换手率, 成交额
         """
         logger.info(f"Tool 'get_realtime_quote' called for {code}")
         return fetch_realtime_quote(
             code=code,
+            format=format,
+        )
+
+    @app.tool()
+    def get_hot_sectors(
+        top_n: int = 20,
+        format: str = "markdown",
+    ) -> str:
+        """
+        Fetches hot concept sectors with top gains.
+        
+        Returns top gaining concept sectors with leading stocks and trading volume.
+        Data source: Eastmoney (东方财富).
+
+        Args:
+            top_n: Number of top sectors to return. Defaults to 20.
+            format: Output format: 'markdown' | 'json' | 'csv'. Defaults to 'markdown'.
+
+        Returns:
+            Hot sectors data with: 板块名称, 涨跌幅, 龙头股, 龙头涨幅, 成交额
+        """
+        logger.info(f"Tool 'get_hot_sectors' called (top_n={top_n})")
+        return fetch_hot_sectors(
+            top_n=top_n,
+            format=format,
+        )
+
+    @app.tool()
+    def get_market_index(
+        format: str = "markdown",
+    ) -> str:
+        """
+        Fetches realtime market index data for major Chinese stock indices.
+        
+        Returns realtime data for: 上证指数, 深证成指, 创业板指, 科创50.
+        Data source: Sina Finance (新浪财经).
+
+        Args:
+            format: Output format: 'markdown' | 'json' | 'csv'. Defaults to 'markdown'.
+
+        Returns:
+            Market index data with: 指数名称, 当前点位, 涨跌点数, 涨跌幅, 成交量, 成交额
+        """
+        logger.info("Tool 'get_market_index' called")
+        return fetch_market_index(
+            format=format,
+        )
+
+    @app.tool()
+    def get_lhb_detail(
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        top_n: int = 20,
+        format: str = "markdown",
+    ) -> str:
+        """
+        Fetches Long-Hu-Bang (龙虎榜) detail data.
+        
+        Long-Hu-Bang shows stocks with significant trading activity by institutional investors.
+        Data source: Eastmoney via Akshare.
+
+        Args:
+            start_date: Start date in format 'YYYYMMDD'. Defaults to 3 days ago.
+            end_date: End date in format 'YYYYMMDD'. Defaults to today.
+            top_n: Number of records to return. Defaults to 20.
+            format: Output format: 'markdown' | 'json' | 'csv'. Defaults to 'markdown'.
+
+        Returns:
+            Long-Hu-Bang data with: 代码, 名称, 上榜日期, 收盘价, 涨跌幅, 净买额, 买入额, 卖出额, 上榜原因, 解读
+        """
+        logger.info(f"Tool 'get_lhb_detail' called (start={start_date}, end={end_date})")
+        return fetch_lhb_detail(
+            start_date=start_date,
+            end_date=end_date,
+            top_n=top_n,
+            format=format,
+        )
+
+    @app.tool()
+    def get_north_money(
+        format: str = "markdown",
+    ) -> str:
+        """
+        Fetches northbound money flow data (北向资金).
+        
+        Northbound money refers to foreign capital flowing into A-shares via Hong Kong.
+        Data source: Eastmoney via Akshare.
+
+        Args:
+            format: Output format: 'markdown' | 'json' | 'csv'. Defaults to 'markdown'.
+
+        Returns:
+            Northbound money flow data with: 日期, 当日净买额, 当日资金流入, 当日资金余额
+        """
+        logger.info("Tool 'get_north_money' called")
+        return fetch_north_money(
+            format=format,
+        )
+
+    @app.tool()
+    def get_limit_up_down(
+        format: str = "markdown",
+    ) -> str:
+        """
+        Fetches daily limit up and limit down stock statistics (涨跌停统计).
+        
+        Shows count of stocks hitting daily price limit (up or down).
+        Data source: Eastmoney via Akshare.
+
+        Args:
+            format: Output format: 'markdown' | 'json' | 'csv'. Defaults to 'markdown'.
+
+        Returns:
+            Statistics with: 日期, 涨停数量, 跌停数量
+        """
+        logger.info("Tool 'get_limit_up_down' called")
+        return fetch_limit_up_down(
             format=format,
         )

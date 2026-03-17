@@ -1,12 +1,16 @@
 """Realtime market use cases for live stock data."""
 import sys
 import os
+import json
+import urllib.request
 from typing import Optional, List
+from datetime import datetime, timedelta
 
 # Add Ashare library path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'Ashare'))
 
 import pandas as pd
+import akshare as ak
 from Ashare import get_price
 from MyTT import (
     MA, EMA, MACD, KDJ, RSI, WR, BOLL, BIAS, CCI, ATR, 
@@ -27,6 +31,13 @@ FREQUENCY_MAP = {
     '1d': '1d',    # 日线
     '1w': '1w',    # 周线
     '1M': '1M',    # 月线
+}
+
+# HTTP headers for external APIs
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://www.eastmoney.com",
+    "Accept-Language": "zh-CN,zh;q=0.9",
 }
 
 
@@ -65,6 +76,48 @@ def normalize_code(code: str) -> str:
             return f"sz{code}"
     
     return code
+
+
+def _fetch_url(url: str, extra_headers: dict = None, timeout: int = 10) -> str:
+    """Helper function to fetch URL content."""
+    req = urllib.request.Request(url, headers=HEADERS)
+    if extra_headers:
+        for k, v in extra_headers.items():
+            req.add_header(k, v)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode('utf-8', errors='replace')
+    except Exception:
+        return ""
+
+
+def _get_turnover_from_eastmoney(code: str) -> dict:
+    """Get turnover rate and amount from Eastmoney API."""
+    normalized = normalize_code(code)
+    market = 1 if normalized.startswith('sh') else 0
+    clean_code = normalized[2:]
+    
+    url = (
+        f"http://push2.eastmoney.com/api/qt/stock/get"
+        f"?secid={market}.{clean_code}"
+        f"&fields=f43,f44,f45,f46,f47,f48,f57,f58,f60,f107,f169,f170,f171"
+    )
+    
+    raw = _fetch_url(url, {"Referer": "https://www.eastmoney.com"})
+    
+    if raw:
+        try:
+            obj = json.loads(raw)
+            d = obj.get("data", {}) or {}
+            if d.get("f43"):
+                return {
+                    "turnover_rate": round(d.get("f171", 0) / 100, 2),
+                    "amount_yi": round(d.get("f48", 0) / 1e8, 2),
+                }
+        except Exception:
+            pass
+    
+    return {"turnover_rate": None, "amount_yi": None}
 
 
 def fetch_realtime_kline(
@@ -270,7 +323,7 @@ def fetch_realtime_quote(
 ) -> str:
     """
     Fetch realtime quote snapshot for a stock.
-    Returns the latest K-line data with key metrics.
+    Returns the latest K-line data with key metrics including turnover rate.
     
     Args:
         code: Stock code
@@ -314,6 +367,13 @@ def fetch_realtime_quote(
             '涨跌幅(%)': round(change_pct, 2),
         }
         
+        # Get turnover rate from Eastmoney
+        extra_data = _get_turnover_from_eastmoney(code)
+        if extra_data.get('turnover_rate') is not None:
+            result['换手率(%)'] = extra_data['turnover_rate']
+        if extra_data.get('amount_yi') is not None:
+            result['成交额(亿)'] = extra_data['amount_yi']
+        
         if has_intraday:
             latest_min = df_min.iloc[-1]
             result['最新价(分钟)'] = round(latest_min['close'], 2)
@@ -323,10 +383,305 @@ def fetch_realtime_quote(
         meta = {
             'code': code,
             'normalized_code': normalized_code,
-            'data_source': 'Ashare (腾讯/新浪)',
+            'data_source': 'Ashare + 东方财富',
         }
         
         return format_table_output(df_result, format=format, max_rows=1, meta=meta)
         
     except Exception as e:
         return f"获取实时行情失败: {str(e)}"
+
+
+def fetch_hot_sectors(
+    top_n: int = 20,
+    format: str = 'markdown',
+) -> str:
+    """
+    Fetch hot concept sectors with top gains using Akshare.
+    
+    Args:
+        top_n: Number of top sectors to return (default 20)
+        format: Output format: 'markdown' | 'json' | 'csv'
+    
+    Returns:
+        Hot concept sectors sorted by change percentage.
+    """
+    validate_output_format(format)
+    
+    try:
+        # Get concept board data from Akshare
+        df = ak.stock_board_concept_name_em()
+        
+        if df is None or df.empty:
+            return "获取热点板块数据失败"
+        
+        # Sort by change rate and get top N
+        df = df.sort_values(by='涨跌幅', ascending=False).head(top_n)
+        
+        # Prepare result
+        results = []
+        for i, (_, row) in enumerate(df.iterrows(), 1):
+            results.append({
+                '排名': i,
+                '板块名称': row.get('板块名称', ''),
+                '板块代码': row.get('板块代码', ''),
+                '涨跌幅(%)': round(row.get('涨跌幅', 0), 2),
+                '总市值(亿)': round(row.get('总市值', 0) / 1e8, 2) if row.get('总市值') else 0,
+                '换手率(%)': round(row.get('换手率', 0), 2) if row.get('换手率') else 0,
+            })
+        
+        df_result = pd.DataFrame(results)
+        
+        meta = {
+            'data_source': '东方财富 (Akshare)',
+            'fetch_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        
+        return format_table_output(df_result, format=format, max_rows=top_n, meta=meta)
+        
+    except Exception as e:
+        return f"获取热点板块数据失败: {str(e)}"
+
+
+def fetch_market_index(
+    format: str = 'markdown',
+) -> str:
+    """
+    Fetch realtime market index data using Akshare.
+    
+    Args:
+        format: Output format: 'markdown' | 'json' | 'csv'
+    
+    Returns:
+        Realtime data for major market indices.
+    """
+    validate_output_format(format)
+    
+    try:
+        # Get index data from Akshare (Sina source)
+        df = ak.stock_zh_index_spot_sina()
+        
+        if df is None or df.empty:
+            return "获取大盘指数数据失败"
+        
+        # Filter major indices
+        major_indices = ['sh000001', 'sh000002', 'sz399001', 'sz399006', 'sh000688']
+        df_filtered = df[df['代码'].isin(major_indices)]
+        
+        # Prepare result
+        results = []
+        name_map = {
+            'sh000001': '上证指数',
+            'sh000002': 'A股指数',
+            'sz399001': '深证成指',
+            'sz399006': '创业板指',
+            'sh000688': '科创50',
+        }
+        
+        for _, row in df_filtered.iterrows():
+            code = row.get('代码', '')
+            results.append({
+                '指数名称': row.get('名称', name_map.get(code, '')),
+                '代码': code,
+                '当前点位': round(float(row.get('今开', 0)), 2),
+                '最新价': round(float(row.get('最新价', 0)), 2),
+                '涨跌额': round(float(row.get('涨跌额', 0)), 2),
+                '涨跌幅(%)': round(float(row.get('涨跌幅', 0)), 2),
+            })
+        
+        df_result = pd.DataFrame(results)
+        
+        meta = {
+            'data_source': '新浪财经 (Akshare)',
+            'fetch_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        
+        return format_table_output(df_result, format=format, max_rows=10, meta=meta)
+        
+    except Exception as e:
+        return f"获取大盘指数数据失败: {str(e)}"
+
+
+def fetch_lhb_detail(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    top_n: int = 20,
+    format: str = 'markdown',
+) -> str:
+    """
+    Fetch Long-Hu-Bang (龙虎榜) detail data.
+    
+    Args:
+        start_date: Start date in format 'YYYYMMDD' (default: 3 days ago)
+        end_date: End date in format 'YYYYMMDD' (default: today)
+        top_n: Number of records to return (default 20)
+        format: Output format: 'markdown' | 'json' | 'csv'
+    
+    Returns:
+        Long-Hu-Bang data including stock code, name, net buy amount, buy/sell amounts, and reason.
+    """
+    validate_output_format(format)
+    
+    # Default date range
+    if end_date is None:
+        end_date = datetime.now().strftime("%Y%m%d")
+    if start_date is None:
+        start_date = (datetime.now() - timedelta(days=3)).strftime("%Y%m%d")
+    
+    try:
+        df = ak.stock_lhb_detail_em(start_date=start_date, end_date=end_date)
+        
+        if df is None or df.empty:
+            return f"未找到 {start_date} 至 {end_date} 的龙虎榜数据"
+        
+        # Select and rename columns
+        columns_map = {
+            '代码': '代码',
+            '名称': '名称',
+            '上榜日': '上榜日期',
+            '收盘价': '收盘价',
+            '涨跌幅': '涨跌幅(%)',
+            '龙虎榜净买额': '净买额(万)',
+            '龙虎榜买入额': '买入额(万)',
+            '龙虎榜卖出额': '卖出额(万)',
+            '上榜原因': '上榜原因',
+            '解读': '解读',
+            '换手率': '换手率(%)',
+            '流通市值': '流通市值',
+        }
+        
+        # Keep only existing columns
+        available_cols = [c for c in columns_map.keys() if c in df.columns]
+        df_result = df[available_cols].copy()
+        
+        # Rename columns
+        df_result.columns = [columns_map[c] for c in available_cols]
+        
+        # Convert amounts to 万元
+        amount_cols = ['净买额(万)', '买入额(万)', '卖出额(万)']
+        for col in amount_cols:
+            if col in df_result.columns:
+                df_result[col] = (df_result[col] / 1e4).round(2)
+        
+        # Round other numeric columns
+        for col in ['收盘价', '涨跌幅(%)', '换手率(%)']:
+            if col in df_result.columns:
+                df_result[col] = df_result[col].round(2)
+        
+        # Convert date to string
+        if '上榜日期' in df_result.columns:
+            df_result['上榜日期'] = df_result['上榜日期'].astype(str).str[:10]
+        
+        # Limit rows
+        df_result = df_result.head(top_n)
+        
+        # Add row number
+        df_result.insert(0, '序号', range(1, len(df_result) + 1))
+        
+        meta = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'data_source': '东方财富 (Akshare)',
+            'fetch_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        
+        return format_table_output(df_result, format=format, max_rows=top_n, meta=meta)
+        
+    except Exception as e:
+        return f"获取龙虎榜数据失败: {str(e)}"
+
+
+def fetch_north_money(
+    format: str = 'markdown',
+) -> str:
+    """
+    Fetch northbound money flow data (北向资金) using Akshare.
+    
+    Args:
+        format: Output format: 'markdown' | 'json' | 'csv'
+    
+    Returns:
+        Northbound money flow data including daily inflow/outflow.
+    """
+    validate_output_format(format)
+    
+    try:
+        # Get northbound money summary
+        df = ak.stock_hsgt_fund_flow_summary_em()
+        
+        if df is None or df.empty:
+            return "获取北向资金数据失败"
+        
+        # Filter northbound data
+        df_north = df[df['资金方向'] == '北向'].copy()
+        
+        # Prepare result
+        results = []
+        for _, row in df_north.iterrows():
+            results.append({
+                '日期': row.get('交易日', ''),
+                '板块': row.get('板块', ''),
+                '成交净买额(亿)': round(row.get('成交净买额', 0), 2),
+                '资金净流入(亿)': round(row.get('资金净流入', 0), 2),
+                '相关指数': row.get('相关指数', ''),
+                '指数涨跌幅(%)': round(row.get('指数涨跌幅', 0), 2),
+            })
+        
+        df_result = pd.DataFrame(results)
+        
+        meta = {
+            'data_source': '东方财富 (Akshare)',
+            'fetch_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        
+        return format_table_output(df_result, format=format, max_rows=5, meta=meta)
+        
+    except Exception as e:
+        return f"获取北向资金数据失败: {str(e)}"
+
+
+def fetch_limit_up_down(
+    format: str = 'markdown',
+) -> str:
+    """
+    Fetch daily limit up and limit down statistics (涨跌停统计) using Akshare.
+    
+    Args:
+        format: Output format: 'markdown' | 'json' | 'csv'
+    
+    Returns:
+        Statistics on limit up and limit down stocks.
+    """
+    validate_output_format(format)
+    
+    try:
+        today = datetime.now().strftime("%Y%m%d")
+        
+        # Get limit up stocks
+        df_up = ak.stock_zt_pool_em(date=today)
+        limit_up_count = len(df_up) if df_up is not None else 0
+        
+        # Get limit down stocks
+        try:
+            df_down = ak.stock_zt_pool_dtgc_em(date=today)
+            limit_down_count = len(df_down) if df_down is not None else 0
+        except:
+            limit_down_count = 0
+        
+        result = [{
+            '日期': datetime.now().strftime("%Y-%m-%d"),
+            '涨停数量': limit_up_count,
+            '跌停数量': limit_down_count,
+        }]
+        
+        df = pd.DataFrame(result)
+        
+        meta = {
+            'data_source': '东方财富 (Akshare)',
+            'fetch_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        
+        return format_table_output(df, format=format, max_rows=1, meta=meta)
+        
+    except Exception as e:
+        return f"获取涨跌停统计失败: {str(e)}"
