@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📊 a-stock-mcp 📈
+# 📊 a-share-mcp 📈
 
 <img src="https://img.shields.io/badge/A股数据-MCP%20工具-E6162D?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiPg0KPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTggMTAuOGMwIDAgMC44LTEuNSAyLjQtMS41IDEuNyAwIDIuOCAxLjUgNC44IDEuNSAxLjcgMCAyLjgtMC42IDIuOC0wLjZ2LTIuMmMwIDAtMS4xIDEuMS0yLjggMS4xLTIgMC0zLjEtMS41LTQuOC0xLjUtMS42IDAtMi40IDAuOS0yLjQgMC45djIuM3pNOCAxNC44YzAgMCAwLjgtMS41IDIuNC0xLjUgMS43IDAgMi44IDEuNSA0LjggMS41IDEuNyAwIDIuOC0wLjYgMi44LTAuNnYtMi4yYzAgMC0xLjEgMS4xLTIuOCAxLjEtMiAwLTMuMS0xLjUtNC44LTEuNS0xLjYgMC0yLjQgMC45LTIuNCAwLjl2Mi4zeiI+PC9wYXRoPg0KPC9zdmc+">
 
@@ -165,11 +165,11 @@ uv sync
 ```json
 {
   "mcpServers": {
-    "a-stock-mcp": {
+    "a-share-mcp": {
       "command": "uv",
       "args": [
         "--directory",
-        "/Users/YourName/Projects/a-stock-mcp",
+        "/Users/YourName/Projects/a-share-mcp",
         "run",
         "python",
         "mcp_server.py"
@@ -190,7 +190,7 @@ uv sync
 
 在 CherryStudio 的 MCP 服务器配置界面中，按如下方式填写：
 
-- **名称**: `a-stock-mcp` (或自定义)
+- **名称**: `a-share-mcp` (或自定义)
 - **描述**: `本地 A 股 MCP 服务器` (或自定义)
 - **类型**: 选择 **标准输入/输出 (stdio)**
 - **命令**: `uv`
@@ -198,7 +198,7 @@ uv sync
 - **参数**:
 
   1. `--directory`
-  2. `/Users/YourName/Projects/a-stock-mcp`
+  2. `/Users/YourName/Projects/a-share-mcp`
   3. `run`
   4. `python`
   5. `mcp_server.py`
