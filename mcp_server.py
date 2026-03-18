@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 # Import the interface and the concrete implementation
 from src.data_source_interface import FinancialDataSource
 from src.baostock_data_source import BaostockDataSource
+from src.ashare_data_source import AshareDataSource
 from src.utils import setup_logging
 
 # 导入各模块工具的注册函数
@@ -19,6 +20,7 @@ from src.tools.date_utils import register_date_utils_tools
 from src.tools.analysis import register_analysis_tools
 from src.tools.helpers import register_helpers_tools
 from src.tools.realtime_market import register_realtime_market_tools
+from src.tools.market_data import register_market_data_tools
 
 # --- Logging Setup ---
 # Call the setup function from utils
@@ -29,6 +31,7 @@ logger = logging.getLogger(__name__)
 # --- Dependency Injection ---
 # Instantiate the data source - easy to swap later if needed
 active_data_source: FinancialDataSource = BaostockDataSource()
+ashare_data_source: AshareDataSource = AshareDataSource()
 
 # --- Get current date for system prompt ---
 current_date = datetime.now().strftime("%Y-%m-%d")
@@ -44,10 +47,25 @@ app = FastMCP(
 3. 当分析"最近"或"近期"市场情况时，必须首先调用 get_market_analysis_timeframe() 工具确定实际的分析时间范围
 4. 任何涉及日期的分析必须基于工具返回的实际数据，不得使用过时或假设的日期
 
-📊 实时行情工具 (新增):
-- get_realtime_kline: 获取实时K线数据（支持1分钟/5分钟/日线等多种周期）
-- get_technical_indicators: 获取技术指标（MA/MACD/KDJ/BOLL/RSI等）
-- get_realtime_quote: 获取实时行情快照
+📊 实时行情工具 (重构):
+- get_realtime_quote: 获取实时行情快照（用分钟K线聚合今日数据，日期和涨跌幅语义正确）
+- get_intraday_minute_kline: 获取当日分钟K线数据（支持1/5/15/30/60分钟）
+- get_realtime_multi_quote: 批量查询实时行情（最多10只，按涨跌幅排序）
+
+📈 技术分析工具:
+- get_realtime_kline: 获取K线数据（支持分钟/日线/周线/月线）
+- get_technical_indicators: 计算技术指标（MA/MACD/KDJ/BOLL/RSI等）
+
+📊 市场数据工具:
+- get_hot_sectors: 热点板块
+- get_market_index: 大盘指数
+- get_lhb_detail: 龙虎榜
+- get_north_money: 北向资金
+- get_limit_up_down: 涨跌停统计
+- get_limit_up_pool: 涨停股池
+- get_limit_down_pool: 跌停股池
+- get_stock_money_flow: 个股资金流向
+- get_consecutive_limit_up: 连板股
 """,
     # Specify dependencies for installation if needed (e.g., when using `mcp install`)
     # dependencies=["baostock", "pandas"]
@@ -62,7 +80,8 @@ register_macroeconomic_tools(app, active_data_source)
 register_date_utils_tools(app, active_data_source)
 register_analysis_tools(app, active_data_source)
 register_helpers_tools(app)
-register_realtime_market_tools(app)
+register_realtime_market_tools(app, ashare_data_source)
+register_market_data_tools(app)
 
 # --- Main Execution Block ---
 if __name__ == "__main__":

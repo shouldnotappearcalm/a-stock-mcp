@@ -33,6 +33,7 @@ a_share_mcp/
 ├── src/                    # 源代码目录
 │   ├── __init__.py
 │   ├── baostock_data_source.py   # Baostock数据源实现
+│   ├── ashare_data_source.py     # Sina/Tencent数据源实现 (新增)
 │   ├── data_source_interface.py  # 数据源接口定义
 │   ├── utils.py                  # 通用工具函数
 │   │
@@ -42,14 +43,16 @@ a_share_mcp/
 │   │
 │   ├── use_cases/          # 业务逻辑层
 │   │   ├── stock_market.py        # 股票市场业务逻辑
-│   │   ├── realtime_market.py     # 实时行情业务逻辑 (新增)
+│   │   ├── realtime_market.py     # 实时行情业务逻辑 (重构)
+│   │   ├── market_data.py         # 市场数据业务逻辑 (新增)
 │   │   └── ...
 │   │
 │   └── tools/              # MCP工具模块
 │       ├── __init__.py
 │       ├── base.py                # 基础工具函数
 │       ├── stock_market.py        # 股票市场数据工具
-│       ├── realtime_market.py     # 实时行情数据工具 (新增)
+│       ├── realtime_market.py     # 实时行情数据工具 (重构)
+│       ├── market_data.py         # 市场数据工具 (新增)
 │       ├── financial_reports.py   # 财务报表工具
 │       ├── indices.py             # 指数相关工具
 │       ├── market_overview.py     # 市场概览工具
@@ -89,10 +92,13 @@ a_share_mcp/
 
 ### 🆕 实时行情数据
 
-- **实时K线**: 支持盘中即时数据，包括 1/5/15/30/60 分钟线
+- **实时行情快照**: 用分钟K线聚合今日数据，日期和涨跌幅语义正确
+- **当日分钟K线**: 获取今日 1/5/15/30/60 分钟K线数据
+- **批量查询**: 一次查询多只股票，按涨跌幅排序
+- **实时K线**: 支持历史 K 线数据，包括 1/5/15/30/60 分钟线、日线、周线、月线
 - **技术指标**: MACD, KDJ, RSI, BOLL, MA 等 12+ 种技术指标实时计算
-- **行情快照**: 一键获取最新价格、涨跌幅等关键数据
-- **数据源**: 腾讯/新浪双核心，无需登录，盘中即时更新
+- **市场数据**: 热点板块、大盘指数、龙虎榜、北向资金、涨跌停统计等
+- **数据源**: Sina/Tencent 双核心封装，无需登录，盘中即时更新
 
 ## 先决条件
 
@@ -253,18 +259,20 @@ uv sync
       <tr valign="top">
         <td colspan="2">
           <ul>
-            <li><code>get_realtime_kline</code> (实时K线) - 支持 1/5/15/30/60 分钟线</li>
+            <li><code>get_realtime_quote</code> (实时行情快照) - 今日价格、涨跌幅、市场状态</li>
+            <li><code>get_intraday_minute_kline</code> (当日分钟K线) 🆕 - 今日 1/5/15/30/60 分钟K线</li>
+            <li><code>get_realtime_multi_quote</code> (批量查询) 🆕 - 多只股票批量查询，按涨跌幅排序</li>
+            <li><code>get_realtime_kline</code> (K线数据) - 历史 K 线，支持分钟/日线/周线/月线</li>
             <li><code>get_technical_indicators</code> (技术指标) - MACD/KDJ/RSI/BOLL 等 12+ 指标</li>
-            <li><code>get_realtime_quote</code> (行情快照) - 含换手率、成交额</li>
-            <li><code>get_market_index</code> (大盘指数) 🆕 - 上证/深证/创业板/科创50</li>
-            <li><code>get_hot_sectors</code> (热点板块) 🆕 - 概念板块涨幅榜</li>
-            <li><code>get_lhb_detail</code> (龙虎榜) 🆕 - 龙虎榜详情数据</li>
-            <li><code>get_north_money</code> (北向资金) 🆕 - 沪深股通资金流向</li>
-            <li><code>get_limit_up_down</code> (涨跌停统计) 🆕 - 当日涨停跌停数量</li>
-            <li><code>get_limit_up_pool</code> (涨停股池) 🆕 - 涨停股详情列表</li>
-            <li><code>get_limit_down_pool</code> (跌停股池) 🆕 - 跌停股详情列表</li>
-            <li><code>get_stock_money_flow</code> (个股资金流向) 🆕 - 主力/大单/小单净流入</li>
-            <li><code>get_consecutive_limit_up</code> (连板股) 🆕 - 连续涨停股统计</li>
+            <li><code>get_market_index</code> (大盘指数) - 上证/深证/创业板/科创50</li>
+            <li><code>get_hot_sectors</code> (热点板块) - 概念板块涨幅榜</li>
+            <li><code>get_lhb_detail</code> (龙虎榜) - 龙虎榜详情数据</li>
+            <li><code>get_north_money</code> (北向资金) - 沪深股通资金流向</li>
+            <li><code>get_limit_up_down</code> (涨跌停统计) - 当日涨停跌停数量</li>
+            <li><code>get_limit_up_pool</code> (涨停股池) - 涨停股详情列表</li>
+            <li><code>get_limit_down_pool</code> (跌停股池) - 跌停股详情列表</li>
+            <li><code>get_stock_money_flow</code> (个股资金流向) - 主力/大单/小单净流入</li>
+            <li><code>get_consecutive_limit_up</code> (连板股) - 连续涨停股统计</li>
           </ul>
         </td>
       </tr>
