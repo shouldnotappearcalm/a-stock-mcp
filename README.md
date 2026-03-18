@@ -194,23 +194,20 @@ uv sync
 
 ### 方法二：在 Chatbox 中配置 (推荐)
 
-Chatbox 也支持通过 `stdio` 启动本地 MCP 服务器。配置思路与上面的 JSON 一致，核心是：
+Chatbox 也支持通过 `stdio` 启动本地 MCP 服务器，不过 **没有“命令”和“参数”两个字段，只有一个命令字段**，所以需要把整条命令写在一起。
 
 - **传输方式**：`stdio`
-- **命令**：`uv`
-- **参数**：`--directory <a-share-mcp 绝对路径> run python mcp_server.py`
+- **命令字段中直接写整条命令**（请替换路径）：
+
+```bash
+uv --directory "/Users/YourName/Projects/a-share-mcp" run python mcp_server.py
+```
 
 在 Chatbox 的 MCP 配置界面中：
 
 - 新增一个 MCP 服务器，名称例如：`a-share-mcp`
 - 选择 **Transport / 传输方式** 为 `stdio`
-- 在 **Command** 中填：`uv`
-- 在 **Args / 参数** 中按顺序填入：
-  1. `--directory`
-  2. `/Users/YourName/Projects/a-share-mcp`（替换为你本地的仓库路径）
-  3. `run`
-  4. `python`
-  5. `mcp_server.py`
+- 在唯一的 **Command** 输入框中，粘贴上面的整条命令（记得把路径改成你本地的实际路径）
 
 如果你已经在 Chatbox 中配置了其他 MCP（例如 `cherrystudio`），**建议把 `a-share-mcp` 这一条放在它们前面**，这样在问 A 股相关问题时，更优先使用本地的 a-share 数据源。
 
