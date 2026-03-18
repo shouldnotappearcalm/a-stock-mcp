@@ -160,7 +160,7 @@ uv sync
 
 ## 使用：在 MCP 客户端中配置服务器
 
-在支持 MCP 的客户端（如 VS Code 插件、CherryStudio 等）中，你需要配置如何启动此服务器。 **推荐使用 `uv`**。
+在支持 MCP 的客户端（如 Chatbox、VS Code 插件、CherryStudio 等）中，你需要配置如何启动此服务器。 **推荐使用 `uv`**。
 
 ### 方法一：使用 JSON 配置的 IDE (例如 Cursor、VSCode、Trae 等)
 
@@ -192,7 +192,29 @@ uv sync
 - **`args`**: 确保参数列表完整且顺序正确
 - **路径**: macOS/Linux 使用正斜杠 `/` 作为目录分隔符
 
-### 方法二：使用 CherryStudio
+### 方法二：在 Chatbox 中配置 (推荐)
+
+Chatbox 也支持通过 `stdio` 启动本地 MCP 服务器。配置思路与上面的 JSON 一致，核心是：
+
+- **传输方式**：`stdio`
+- **命令**：`uv`
+- **参数**：`--directory <a-share-mcp 绝对路径> run python mcp_server.py`
+
+在 Chatbox 的 MCP 配置界面中：
+
+- 新增一个 MCP 服务器，名称例如：`a-share-mcp`
+- 选择 **Transport / 传输方式** 为 `stdio`
+- 在 **Command** 中填：`uv`
+- 在 **Args / 参数** 中按顺序填入：
+  1. `--directory`
+  2. `/Users/YourName/Projects/a-share-mcp`（替换为你本地的仓库路径）
+  3. `run`
+  4. `python`
+  5. `mcp_server.py`
+
+如果你已经在 Chatbox 中配置了其他 MCP（例如 `cherrystudio`），**建议把 `a-share-mcp` 这一条放在它们前面**，这样在问 A 股相关问题时，更优先使用本地的 a-share 数据源。
+
+### 方法三：使用 CherryStudio
 
 在 CherryStudio 的 MCP 服务器配置界面中，按如下方式填写：
 
